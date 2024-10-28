@@ -28,23 +28,23 @@ int main() {
         printf("\n");
     }
 
-    printf("\nINFORMAÇÕES DOS ESTADOS\n");
+    printf("\nINFORMACOES DOS ESTADOS\n");
     for (int i = 0; i < NUM_ESTADOS; i++) {
         imprimirEstado(estados[i]);
     }
 
     calcularMaiorMenorAcidentes(estados, NUM_ESTADOS, &indiceMaior, &indiceMenor);
-    printf("\nMaior número de acidentes: %d (%s)\n", estados[indiceMaior].num_acidentes, estados[indiceMaior].nome);
-    printf("Menor número de acidentes: %d (%s)\n", estados[indiceMenor].num_acidentes, estados[indiceMenor].nome);
+    printf("\nMaior numero de acidentes: %d (%s)\n", estados[indiceMaior].num_acidentes, estados[indiceMaior].nome);
+    printf("Menor numero de acidentes: %d (%s)\n", estados[indiceMenor].num_acidentes, estados[indiceMenor].nome);
 
-    printf("\nPercentual de veículos envolvidos em acidentes por estado:\n");
+    printf("\nPercentual de veiculos envolvidos em acidentes por estado:\n");
     for (int i = 0; i < NUM_ESTADOS; i++) {
         float percentual = estados[i].num_veiculos == 0 ? 0.0 : (float)estados[i].num_acidentes / estados[i].num_veiculos * 100;
         printf("- %s: %.2f%%\n", estados[i].nome, percentual);
     }
 
     float media = calcularMediaAcidentes(estados, NUM_ESTADOS);
-    printf("\nMédia de acidentes no país: %.2f\n", media);
+    printf("\nMedia de acidentes no pais: %.2f\n", media);
 
     imprimirEstadosAcimaDaMedia(estados, NUM_ESTADOS, media);
 
@@ -55,17 +55,17 @@ void lerEstado(struct Estado *estado) {
     printf("Informe o nome do estado: ");
     scanf(" %[^\n]", estado->nome);
 
-    printf("Informe o número de veículos no estado (em 2007): ");
+    printf("Informe o numero de veiculos no estado (em 2007): ");
     scanf("%d", &estado->num_veiculos);
 
-    printf("Informe o número de acidentes no estado (em 2007): ");
+    printf("Informe o numero de acidentes no estado (em 2007): ");
     scanf("%d", &estado->num_acidentes);
 }
 
 void imprimirEstado(struct Estado estado) {
     printf("- Estado: %s\n", estado.nome);
-    printf("  Número de veículos: %d\n", estado.num_veiculos);
-    printf("  Número de acidentes: %d\n", estado.num_acidentes);
+    printf("  Numero de veiculos: %d\n", estado.num_veiculos);
+    printf("  Numero de acidentes: %d\n", estado.num_acidentes);
 }
 
 void calcularMaiorMenorAcidentes(struct Estado estados[], int tamanho, int *indiceMaior, int *indiceMenor) {
@@ -91,7 +91,7 @@ float calcularMediaAcidentes(struct Estado estados[], int tamanho) {
 }
 
 void imprimirEstadosAcimaDaMedia(struct Estado estados[], int tamanho, float media) {
-    printf("Estados com acidentes acima da média nacional:\n");
+    printf("Estados com acidentes acima da media nacional:\n");
     for (int i = 0; i < tamanho; i++) {
         if (estados[i].num_acidentes > media) {
             printf("- %s com %d acidentes\n", estados[i].nome, estados[i].num_acidentes);
