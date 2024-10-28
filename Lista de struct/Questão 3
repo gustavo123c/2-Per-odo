@@ -1,1 +1,178 @@
+//Gustavo Costa
+#include <stdio.h>
+#include <string.h>
 
+#define TAM_CLIENTE 100
+#define MAX_CONTAS 50
+
+struct Conta {
+    int numero_conta;
+    char nome[TAM_CLIENTE];
+    char cpf[12]; // CPF deve ter 11 dígitos + 1 para o terminador '\0'
+    char telefone[15]; // Telefone com DDD, no formato "(XX) XXXXX-XXXX"
+    float saldo;
+};
+
+// Funções
+int buscarConta(struct Conta contas[], int tamanho, int numero_conta);
+void cadastrarConta(struct Conta contas[], int *tamanho);
+void consultarSaldo(struct Conta contas[], int tamanho, int numero_conta);
+void deposito(struct Conta contas[], int tamanho, int numero_conta);
+void saque(struct Conta contas[], int tamanho, int numero_conta);
+void exibirContas(struct Conta contas[], int tamanho);
+
+int main() {
+    struct Conta contas[MAX_CONTAS];
+    int tamanho = 0;
+    int opcao;
+
+    do {
+        printf("\nBanco Dinheiro Certo\n");
+        printf("1. Cadastrar nova conta\n");
+        printf("2. Consultar saldo\n");
+        printf("3. Depositar\n");
+        printf("4. Sacar\n");
+        printf("5. Exibir contas\n");
+        printf("6. Sair\n");
+        printf("Escolha uma opcao: ");
+        scanf("%d", &opcao);
+
+        switch (opcao) {
+            case 1:
+                cadastrarConta(contas, &tamanho);
+                break;
+            case 2:
+                {
+                    int numero_conta;
+                    printf("Informe o numero da conta: ");
+                    scanf("%d", &numero_conta);
+                    consultarSaldo(contas, tamanho, numero_conta);
+                }
+                break;
+            case 3:
+                {
+                    int numero_conta;
+                    printf("Informe o numero da conta para deposito: ");
+                    scanf("%d", &numero_conta);
+                    deposito(contas, tamanho, numero_conta);
+                }
+                break;
+            case 4:
+                {
+                    int numero_conta;
+                    printf("Informe o numero da conta para saque: ");
+                    scanf("%d", &numero_conta);
+                    saque(contas, tamanho, numero_conta);
+                }
+                break;
+            case 5:
+                exibirContas(contas, tamanho);
+                break;
+            case 6:
+                printf("Saindo...\n");
+                break;
+            default:
+                printf("Opcao invalida! Tente novamente.\n");
+        }
+    } while (opcao != 6);
+
+    return 0;
+}
+
+int buscarConta(struct Conta contas[], int tamanho, int numero_conta) {
+    if (tamanho == 0) {
+        return -1; // Cadastro vazio
+    }
+    
+    for (int i = 0; i < tamanho; i++) {
+        if (contas[i].numero_conta == numero_conta) {
+            return i; // Conta encontrada
+        }
+    }
+    return -2; // Conta não encontrada
+}
+
+void cadastrarConta(struct Conta contas[], int *tamanho) {
+    if (*tamanho >= MAX_CONTAS) {
+        printf("Limite de contas atingido.\n");
+        return;
+    }
+
+    int numero_conta;
+    printf("Informe o numero da conta: ");
+    scanf("%d", &numero_conta);
+
+    if (buscarConta(contas, *tamanho, numero_conta) >= 0) {
+        printf("Erro: Numero da conta ja cadastrado.\n");
+        return;
+    }
+
+    struct Conta nova_conta;
+    nova_conta.numero_conta = numero_conta;
+
+    printf("Informe o nome do titular: ");
+    scanf(" %[^\n]", nova_conta.nome);
+    printf("Informe o CPF do titular: ");
+    scanf(" %[^\n]", nova_conta.cpf);
+    printf("Informe o telefone de contato: ");
+    scanf(" %[^\n]", nova_conta.telefone);
+    nova_conta.saldo = 0.0; // Inicialmente o saldo é 0
+
+    contas[*tamanho] = nova_conta;
+    (*tamanho)++;
+    printf("Conta cadastrada com sucesso!\n");
+}
+
+void consultarSaldo(struct Conta contas[], int tamanho, int numero_conta) {
+    int pos = buscarConta(contas, tamanho, numero_conta);
+    if (pos >= 0) {
+        printf("Saldo da conta %d: R$ %.2f\n", contas[pos].numero_conta, contas[pos].saldo);
+    } else {
+        printf("Conta nao cadastrada.\n");
+    }
+}
+
+void deposito(struct Conta contas[], int tamanho, int numero_conta) {
+    int pos = buscarConta(contas, tamanho, numero_conta);
+    if (pos >= 0) {
+        float valor;
+        printf("Informe o valor do deposito: ");
+        scanf("%f", &valor);
+        if (valor > 0) {
+            contas[pos].saldo += valor;
+            printf("Deposito realizado! Novo saldo: R$ %.2f\n", contas[pos].saldo);
+        } else {
+            printf("Valor invalido para deposito.\n");
+        }
+    } else {
+        printf("Conta nao cadastrada.\n");
+    }
+}
+
+void saque(struct Conta contas[], int tamanho, int numero_conta) {
+    int pos = buscarConta(contas, tamanho, numero_conta);
+    if (pos >= 0) {
+        float valor;
+        printf("Informe o valor do saque: ");
+        scanf("%f", &valor);
+        if (valor > 0 && valor <= contas[pos].saldo) {
+            contas[pos].saldo -= valor;
+            printf("Saque realizado! Novo saldo: R$ %.2f\n", contas[pos].saldo);
+        } else {
+            printf("Saldo insuficiente ou valor invalido para saque.\n");
+        }
+    } else {
+        printf("Conta nao cadastrada.\n");
+    }
+}
+
+void exibirContas(struct Conta contas[], int tamanho) {
+    if (tamanho == 0) {
+        printf("Nenhuma conta cadastrada.\n");
+        return;
+    }
+    printf("Numero da Conta | Nome do Titular | Telefone\n");
+    for (int i = 0; i < tamanho; i++) {
+        printf("%d | %s | %s\n", contas[i].numero_conta, contas[i].nome, contas[i].telefone);
+    }
+}
