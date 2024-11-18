@@ -8,7 +8,7 @@
 typedef struct {
     int id;
     char titulo[50];
-    char descricao[100];
+    char descricao[300];
 } Filme;
 
 typedef struct {
