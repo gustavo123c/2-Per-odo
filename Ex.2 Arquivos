@@ -18,7 +18,52 @@ typedef struct {
     int qtdFavoritos;
 } Usuario;
 
-// Funcoes auxiliares para manipulacao de filmes
+// Funções de verificação
+int checkFilmeIdExists(int id, const char *nomeArquivo) {
+    FILE *arquivo = fopen(nomeArquivo, "rb");
+    if (!arquivo) return 0;
+
+    Filme filme;
+    while (fread(&filme, sizeof(Filme), 1, arquivo)) {
+        if (filme.id == id) {
+            fclose(arquivo);
+            return 1;
+        }
+    }
+    fclose(arquivo);
+    return 0;
+}
+
+int checkUsuarioIdExists(int id, const char *nomeArquivo) {
+    FILE *arquivo = fopen(nomeArquivo, "rb");
+    if (!arquivo) return 0;
+
+    Usuario usuario;
+    while (fread(&usuario, sizeof(Usuario), 1, arquivo)) {
+        if (usuario.id == id) {
+            fclose(arquivo);
+            return 1;
+        }
+    }
+    fclose(arquivo);
+    return 0;
+}
+
+int checkFilmeFavorito(Usuario usuario, int idFilme) {
+    for (int i = 0; i < usuario.qtdFavoritos; i++) {
+        if (usuario.filmesFavoritos[i] == idFilme) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// Funções auxiliares para manipulação de strings
+void limparNewline(char *str) {
+    str[strcspn(str, "\n")] = '\0';
+}
+
+// Funções auxiliares para manipulação de filmes
 void escreverFilme(Filme filme, FILE *arquivo) {
     fwrite(&filme, sizeof(Filme), 1, arquivo);
 }
@@ -37,18 +82,33 @@ void atualizarFilme(Filme filmeNovo, const char *nomeArquivo) {
     }
 
     Filme filme;
+    int encontrado = 0;
     while (fread(&filme, sizeof(Filme), 1, arquivo)) {
         if (filme.id == filmeNovo.id) {
-            fseek(arquivo, -sizeof(Filme), SEEK_CUR);
+            if (fseek(arquivo, -sizeof(Filme), SEEK_CUR) != 0) {
+                printf("Erro ao posicionar no arquivo.\n");
+                fclose(arquivo);
+                return;
+            }
             fwrite(&filmeNovo, sizeof(Filme), 1, arquivo);
+            encontrado = 1;
             break;
         }
+    }
+
+    if (!encontrado) {
+        printf("Filme com ID %d nao encontrado.\n", filmeNovo.id);
     }
 
     fclose(arquivo);
 }
 
 void removerFilme(int id, const char *nomeArquivo) {
+    if (!checkFilmeIdExists(id, nomeArquivo)) {
+        printf("Filme com ID %d nao encontrado.\n", id);
+        return;
+    }
+
     FILE *arquivo = fopen(nomeArquivo, "rb");
     if (!arquivo) {
         printf("Erro ao abrir o arquivo de filmes.\n");
@@ -63,34 +123,30 @@ void removerFilme(int id, const char *nomeArquivo) {
     }
 
     Filme filme;
-    int encontrado = 0;
-
     while (fread(&filme, sizeof(Filme), 1, arquivo)) {
         if (filme.id != id) {
             fwrite(&filme, sizeof(Filme), 1, temp);
-        } else {
-            encontrado = 1;
         }
     }
 
     fclose(arquivo);
     fclose(temp);
 
-    if (!encontrado) {
-        printf("Filme com ID %d nao encontrado.\n", id);
+    if (remove(nomeArquivo) != 0) {
+        printf("Erro ao remover arquivo original.\n");
         remove("temp.bin");
         return;
     }
 
-    if (remove(nomeArquivo) != 0 || rename("temp.bin", nomeArquivo) != 0) {
-        printf("Erro ao atualizar o arquivo de filmes.\n");
+    if (rename("temp.bin", nomeArquivo) != 0) {
+        printf("Erro ao renomear arquivo temporario.\n");
         return;
     }
 
     printf("Filme com ID %d removido com sucesso!\n", id);
 }
 
-// Funcoes auxiliares para manipulacao de usuarios
+// Funções auxiliares para manipulação de usuarios
 void escreverUsuario(Usuario usuario, FILE *arquivo) {
     fwrite(&usuario, sizeof(Usuario), 1, arquivo);
 }
@@ -109,52 +165,69 @@ void atualizarUsuario(Usuario usuarioNovo, const char *nomeArquivoUsuarios) {
     }
 
     Usuario usuario;
+    int encontrado = 0;
     while (fread(&usuario, sizeof(Usuario), 1, arquivo)) {
         if (usuario.id == usuarioNovo.id) {
-            fseek(arquivo, -sizeof(Usuario), SEEK_CUR);
+            if (fseek(arquivo, -sizeof(Usuario), SEEK_CUR) != 0) {
+                printf("Erro ao posicionar no arquivo.\n");
+                fclose(arquivo);
+                return;
+            }
+            usuarioNovo.qtdFavoritos = usuario.qtdFavoritos;
+            memcpy(usuarioNovo.filmesFavoritos, usuario.filmesFavoritos, sizeof(usuario.filmesFavoritos));
             fwrite(&usuarioNovo, sizeof(Usuario), 1, arquivo);
+            encontrado = 1;
             break;
         }
+    }
+
+    if (!encontrado) {
+        printf("usuario com ID %d nao encontrado.\n", usuarioNovo.id);
     }
 
     fclose(arquivo);
 }
 
 void removerUsuario(int idUsuario, const char *nomeArquivoUsuarios) {
-    FILE *arquivoUsuarios = fopen(nomeArquivoUsuarios, "r+b");
-    FILE *tempFile = fopen("temp_usuarios.bin", "wb");
-    if (!arquivoUsuarios || !tempFile) {
+    if (!checkUsuarioIdExists(idUsuario, nomeArquivoUsuarios)) {
+        printf("usuario com ID %d nao encontrado.\n", idUsuario);
+        return;
+    }
+
+    FILE *arquivo = fopen(nomeArquivoUsuarios, "rb");
+    FILE *temp = fopen("temp_usuarios.bin", "wb");
+    if (!arquivo || !temp) {
         printf("Erro ao abrir os arquivos.\n");
+        if (arquivo) fclose(arquivo);
+        if (temp) fclose(temp);
         return;
     }
 
     Usuario usuario;
-    int usuarioRemovido = 0;
-
-    // Copiar todos os usuarios para o arquivo temporario, exceto o removido
-    while (fread(&usuario, sizeof(Usuario), 1, arquivoUsuarios)) {
+    while (fread(&usuario, sizeof(Usuario), 1, arquivo)) {
         if (usuario.id != idUsuario) {
-            fwrite(&usuario, sizeof(Usuario), 1, tempFile);
-        } else {
-            usuarioRemovido = 1;
+            fwrite(&usuario, sizeof(Usuario), 1, temp);
         }
     }
 
-    if (!usuarioRemovido) {
-        printf("Usuario com ID %d nao encontrado.\n", idUsuario);
-    } else {
-        printf("Usuario com ID %d removido com sucesso.\n", idUsuario);
+    fclose(arquivo);
+    fclose(temp);
+
+    if (remove(nomeArquivoUsuarios) != 0) {
+        printf("Erro ao remover arquivo original.\n");
+        remove("temp_usuarios.bin");
+        return;
     }
 
-    fclose(arquivoUsuarios);
-    fclose(tempFile);
+    if (rename("temp_usuarios.bin", nomeArquivoUsuarios) != 0) {
+        printf("Erro ao renomear arquivo temporario.\n");
+        return;
+    }
 
-    // Substituir o arquivo original pelo temporario
-    remove(nomeArquivoUsuarios);
-    rename("temp_usuarios.bin", nomeArquivoUsuarios);
+    printf("usuario com ID %d removido com sucesso.\n", idUsuario);
 }
 
-// Funcoes para listar filmes e usuarios
+// Funções para listar filmes e usuarios
 void listarFilmes(const char *nomeArquivo) {
     FILE *arquivo = fopen(nomeArquivo, "rb");
     if (!arquivo) {
@@ -163,9 +236,17 @@ void listarFilmes(const char *nomeArquivo) {
     }
 
     Filme filme;
-    printf("Lista de Filmes:\n");
+    int encontrou = 0;
+    printf("\nLista de Filmes:\n");
+    printf("----------------------------------------\n");
     while (fread(&filme, sizeof(Filme), 1, arquivo)) {
-        printf("ID: %d, Titulo: %s, Descricao: %s\n", filme.id, filme.titulo, filme.descricao);
+        printf("ID: %d\ntitulo: %s\ndescricao: %s\n", filme.id, filme.titulo, filme.descricao);
+        printf("----------------------------------------\n");
+        encontrou = 1;
+    }
+
+    if (!encontrou) {
+        printf("Nenhum filme cadastrado.\n");
     }
 
     fclose(arquivo);
@@ -173,109 +254,110 @@ void listarFilmes(const char *nomeArquivo) {
 
 void listarUsuarios(const char *nomeArquivoUsuarios, const char *nomeArquivoFilmes) {
     FILE *arquivoUsuarios = fopen(nomeArquivoUsuarios, "rb");
-    FILE *arquivoFilmes = fopen(nomeArquivoFilmes, "rb");
-    if (!arquivoUsuarios || !arquivoFilmes) {
-        printf("Erro ao abrir os arquivos de usuarios ou filmes.\n");
+    if (!arquivoUsuarios) {
+        printf("Erro ao abrir o arquivo de usuarios.\n");
         return;
     }
 
     Usuario usuario;
-    Filme filme;
-    printf("Lista de Usuarios:\n");
-
-    // Percorrer todos os usuarios no arquivo
+    int encontrou = 0;
+    printf("\nLista de usuarios:\n");
+    printf("----------------------------------------\n");
     while (fread(&usuario, sizeof(Usuario), 1, arquivoUsuarios)) {
-        printf("ID: %d, Nome: %s\n", usuario.id, usuario.nome);
-        printf("Filmes Favoritos:\n");
+        printf("ID: %d\nNome: %s\n", usuario.id, usuario.nome);
 
-        // Para cada filme favorito, procurar o filme no arquivo de filmes
-        for (int i = 0; i < usuario.qtdFavoritos; i++) {
-            fseek(arquivoFilmes, 0, SEEK_SET);  // Voltar ao inicio do arquivo de filmes
-            while (fread(&filme, sizeof(Filme), 1, arquivoFilmes)) {
-                if (filme.id == usuario.filmesFavoritos[i]) {
-                    printf("  - ID: %d, Titulo: %s\n", filme.id, filme.titulo);
-                    break;  // Encontra o filme e quebra o loop para evitar multipla impressao
+        if (usuario.qtdFavoritos > 0) {
+            printf("Filmes Favoritos:\n");
+            for (int i = 0; i < usuario.qtdFavoritos; i++) {
+                FILE *arquivoFilmes = fopen(nomeArquivoFilmes, "rb");
+                if (arquivoFilmes) {
+                    Filme filme;
+                    while (fread(&filme, sizeof(Filme), 1, arquivoFilmes)) {
+                        if (filme.id == usuario.filmesFavoritos[i]) {
+                            printf("  - %s (ID: %d)\n", filme.titulo, filme.id);
+                            break;
+                        }
+                    }
+                    fclose(arquivoFilmes);
                 }
             }
+        } else {
+            printf("Nenhum filme favorito.\n");
         }
+        printf("----------------------------------------\n");
+        encontrou = 1;
+    }
 
-        printf("\n");  // Espaco para separacao visual entre usuarios
+    if (!encontrou) {
+        printf("Nenhum usuario cadastrado.\n");
     }
 
     fclose(arquivoUsuarios);
-    fclose(arquivoFilmes);
 }
 
-// Funcao para adicionar filme aos favoritos do usuario
 void adicionarFilmeFavorito(int idUsuario, int idFilme, const char *nomeArquivoUsuarios, const char *nomeArquivoFilmes) {
-    FILE *arquivoUsuarios = fopen(nomeArquivoUsuarios, "r+b");
-    FILE *arquivoFilmes = fopen(nomeArquivoFilmes, "rb");
-    if (!arquivoUsuarios || !arquivoFilmes) {
-        printf("Erro ao abrir os arquivos de usuarios ou filmes.\n");
+    if (!checkUsuarioIdExists(idUsuario, nomeArquivoUsuarios)) {
+        printf("usuario com ID %d nao encontrado.\n", idUsuario);
+        return;
+    }
+
+    if (!checkFilmeIdExists(idFilme, nomeArquivoFilmes)) {
+        printf("Filme com ID %d nao encontrado.\n", idFilme);
+        return;
+    }
+
+    FILE *arquivo = fopen(nomeArquivoUsuarios, "r+b");
+    if (!arquivo) {
+        printf("Erro ao abrir o arquivo de usuarios.\n");
         return;
     }
 
     Usuario usuario;
-    Filme filme;
-    int usuarioEncontrado = 0;
-    int filmeValido = 0;
-
-    // Verificar se o usuario existe
-    while (fread(&usuario, sizeof(Usuario), 1, arquivoUsuarios)) {
+    while (fread(&usuario, sizeof(Usuario), 1, arquivo)) {
         if (usuario.id == idUsuario) {
-            usuarioEncontrado = 1;
+            if (usuario.qtdFavoritos >= MAX_FAVORITOS) {
+                printf("Lista de favoritos cheia! Maximo de %d filmes permitidos.\n", MAX_FAVORITOS);
+                fclose(arquivo);
+                return;
+            }
+
+            if (checkFilmeFavorito(usuario, idFilme)) {
+                printf("Filme ja esta na lista de favoritos.\n");
+                fclose(arquivo);
+                return;
+            }
+
+            usuario.filmesFavoritos[usuario.qtdFavoritos] = idFilme;
+            usuario.qtdFavoritos++;
+
+            if (fseek(arquivo, -sizeof(Usuario), SEEK_CUR) != 0) {
+                printf("Erro ao posicionar no arquivo.\n");
+                fclose(arquivo);
+                return;
+            }
+
+            fwrite(&usuario, sizeof(Usuario), 1, arquivo);
+            printf("Filme adicionado aos favoritos com sucesso!\n");
             break;
         }
     }
 
-    // Verificar se o filme existe
-    fseek(arquivoFilmes, 0, SEEK_SET);
-    while (fread(&filme, sizeof(Filme), 1, arquivoFilmes)) {
-        if (filme.id == idFilme) {
-            filmeValido = 1;
-            break;
-        }
-    }
-
-    fclose(arquivoFilmes);
-
-    if (!usuarioEncontrado) {
-        printf("Usuario com ID %d nao encontrado.\n", idUsuario);
-        fclose(arquivoUsuarios);
-        return;
-    }
-
-    if (!filmeValido) {
-        printf("Filme com ID %d nao encontrado.\n", idFilme);
-        fclose(arquivoUsuarios);
-        return;
-    }
-
-    // Adicionar o filme aos favoritos do usuario
-    fseek(arquivoUsuarios, -sizeof(Usuario), SEEK_CUR);
-    usuario.filmesFavoritos[usuario.qtdFavoritos] = idFilme;
-    usuario.qtdFavoritos++;
-
-    fseek(arquivoUsuarios, -sizeof(Usuario), SEEK_CUR);
-    fwrite(&usuario, sizeof(Usuario), 1, arquivoUsuarios);
-
-    printf("Filme com ID %d adicionado aos favoritos do usuario %d.\n", idFilme, idUsuario);
-    fclose(arquivoUsuarios);
+    fclose(arquivo);
 }
 
-// Menu principal
 void exibirMenu() {
-    printf("\n--- Menu ---\n");
+    printf("\n=== Sistema de Gerenciamento de Filmes ===\n");
     printf("1. Cadastrar Filme\n");
-    printf("2. Cadastrar Usuario\n");
+    printf("2. Cadastrar usuario\n");
     printf("3. Listar Filmes\n");
-    printf("4. Listar Usuarios\n");
+    printf("4. Listar usuarios\n");
     printf("5. Atualizar Filme\n");
-    printf("6. Atualizar Usuario\n");
+    printf("6. Atualizar usuario\n");
     printf("7. Remover Filme\n");
-    printf("8. Remover Usuario\n");
+    printf("8. Remover usuario\n");
     printf("9. Adicionar Filme aos Favoritos\n");
     printf("0. Sair\n");
+    printf("=======================================\n");
     printf("Escolha uma opcao: ");
 }
 
@@ -283,22 +365,39 @@ int main() {
     const char *nomeArquivoFilmes = "filmes.bin";
     const char *nomeArquivoUsuarios = "usuarios.bin";
 
-    // Testando as funcionalidades principais
     while (1) {
         exibirMenu();
         int opcao;
-        scanf("%d", &opcao);
+        if (scanf("%d", &opcao) != 1) {
+            printf("Entrada invalida! Por favor, digite um numero.\n");
+            while (getchar() != '\n'); // Limpa o buffer de entrada
+            continue;
+        }
+        getchar(); // Consume newline
 
         switch (opcao) {
             case 1: {
                 Filme filme;
                 printf("Digite o ID do filme: ");
-                scanf("%d", &filme.id);
+                if (scanf("%d", &filme.id) != 1) {
+                    printf("ID invalido!\n");
+                    while (getchar() != '\n');
+                    break;
+                }
+                getchar(); // Consume newline
+
+                if (checkFilmeIdExists(filme.id, nomeArquivoFilmes)) {
+                    printf("Filme com ID %d ja existe!\n", filme.id);
+                    break;
+                }
+
                 printf("Digite o titulo do filme: ");
-                getchar(); // Para consumir o newline
                 fgets(filme.titulo, sizeof(filme.titulo), stdin);
                 printf("Digite a descricao do filme: ");
                 fgets(filme.descricao, sizeof(filme.descricao), stdin);
+
+                limparNewline(filme.titulo);
+                limparNewline(filme.descricao);
 
                 FILE *arquivoFilmes = fopen(nomeArquivoFilmes, "ab");
                 if (arquivoFilmes) {
@@ -313,17 +412,30 @@ int main() {
             case 2: {
                 Usuario usuario;
                 printf("Digite o ID do usuario: ");
-                scanf("%d", &usuario.id);
+                if (scanf("%d", &usuario.id) != 1) {
+                    printf("ID invalido!\n");
+                    while (getchar() != '\n');
+                    break;
+                }
+                getchar(); // Consume newline
+
+                if (checkUsuarioIdExists(usuario.id, nomeArquivoUsuarios)) {
+                    printf("usuario com ID %d ja existe!\n", usuario.id);
+                    break;
+                }
+
+                memset(usuario.nome, 0, sizeof(usuario.nome)); // Clear the name buffer
                 printf("Digite o nome do usuario: ");
-                getchar(); // Para consumir o newline
-                fgets(usuario.nome, sizeof(usuario.nome), stdin);
+                if (fgets(usuario.nome, sizeof(usuario.nome), stdin) != NULL) {
+                    limparNewline(usuario.nome);
+                }
                 usuario.qtdFavoritos = 0;
 
                 FILE *arquivoUsuarios = fopen(nomeArquivoUsuarios, "ab");
                 if (arquivoUsuarios) {
                     escreverUsuario(usuario, arquivoUsuarios);
                     fclose(arquivoUsuarios);
-                    printf("Usuario cadastrado com sucesso!\n");
+                    printf("usuario cadastrado com sucesso!\n");
                 } else {
                     printf("Erro ao abrir arquivo de usuarios.\n");
                 }
@@ -340,45 +452,98 @@ int main() {
             case 5: {
                 Filme filmeNovo;
                 printf("Digite o ID do filme a ser atualizado: ");
-                scanf("%d", &filmeNovo.id);
+                if (scanf("%d", &filmeNovo.id) != 1) {
+                    printf("ID invalido!\n");
+                    while (getchar() != '\n');
+                    break;
+                }
+                getchar(); // Consume newline
+
+                if (!checkFilmeIdExists(filmeNovo.id, nomeArquivoFilmes)) {
+                    printf("Filme com ID %d nao existe!\n", filmeNovo.id);
+                    break;
+                }
+
                 printf("Digite o novo titulo do filme: ");
-                getchar(); // Para consumir o newline
                 fgets(filmeNovo.titulo, sizeof(filmeNovo.titulo), stdin);
                 printf("Digite a nova descricao do filme: ");
                 fgets(filmeNovo.descricao, sizeof(filmeNovo.descricao), stdin);
+
+                limparNewline(filmeNovo.titulo);
+                limparNewline(filmeNovo.descricao);
+
                 atualizarFilme(filmeNovo, nomeArquivoFilmes);
+                printf("Filme atualizado com sucesso!\n");
                 break;
             }
             case 6: {
                 Usuario usuarioNovo;
                 printf("Digite o ID do usuario a ser atualizado: ");
-                scanf("%d", &usuarioNovo.id);
+                if (scanf("%d", &usuarioNovo.id) != 1) {
+                    printf("ID invalido!\n");
+                    while (getchar() != '\n');
+                    break;
+                }
+                getchar(); // Consume newline
+
+                if (!checkUsuarioIdExists(usuarioNovo.id, nomeArquivoUsuarios)) {
+                    printf("usuario com ID %d nao existe!\n", usuarioNovo.id);
+                    break;
+                }
+
+                memset(usuarioNovo.nome, 0, sizeof(usuarioNovo.nome)); // Clear the name buffer
                 printf("Digite o novo nome do usuario: ");
-                getchar(); // Para consumir o newline
-                fgets(usuarioNovo.nome, sizeof(usuarioNovo.nome), stdin);
+                if (fgets(usuarioNovo.nome, sizeof(usuarioNovo.nome), stdin) != NULL) {
+                    limparNewline(usuarioNovo.nome);
+                }
+
                 atualizarUsuario(usuarioNovo, nomeArquivoUsuarios);
+                printf("usuario atualizado com sucesso!\n");
                 break;
             }
             case 7: {
                 int idFilme;
                 printf("Digite o ID do filme a ser removido: ");
-                scanf("%d", &idFilme);
+                if (scanf("%d", &idFilme) != 1) {
+                    printf("ID invalido!\n");
+                    while (getchar() != '\n');
+                    break;
+                }
+                getchar(); // Consume newline
+
                 removerFilme(idFilme, nomeArquivoFilmes);
                 break;
             }
             case 8: {
                 int idUsuario;
                 printf("Digite o ID do usuario a ser removido: ");
-                scanf("%d", &idUsuario);
+                if (scanf("%d", &idUsuario) != 1) {
+                    printf("ID invalido!\n");
+                    while (getchar() != '\n');
+                    break;
+                }
+                getchar(); // Consume newline
+
                 removerUsuario(idUsuario, nomeArquivoUsuarios);
                 break;
             }
             case 9: {
                 int idUsuario, idFilme;
                 printf("Digite o ID do usuario: ");
-                scanf("%d", &idUsuario);
+                if (scanf("%d", &idUsuario) != 1) {
+                    printf("ID de usuario invalido!\n");
+                    while (getchar() != '\n');
+                    break;
+                }
+
                 printf("Digite o ID do filme a ser adicionado aos favoritos: ");
-                scanf("%d", &idFilme);
+                if (scanf("%d", &idFilme) != 1) {
+                    printf("ID de filme invalido!\n");
+                    while (getchar() != '\n');
+                    break;
+                }
+                getchar(); // Consume newline
+
                 adicionarFilmeFavorito(idUsuario, idFilme, nomeArquivoUsuarios, nomeArquivoFilmes);
                 break;
             }
@@ -386,10 +551,9 @@ int main() {
                 printf("Saindo do programa...\n");
                 return 0;
             default:
-                printf("Opcao invalida!\n");
+                printf("opcao invalida!\n");
         }
     }
 
     return 0;
 }
-
